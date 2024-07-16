@@ -18,7 +18,7 @@ MAX_QUERIES_PER_DAY = 5  # Whitelisted user query limit
 REPO_REMOTE = "github"
 REPO_OWNER = "followingthefasciaplane"
 REPO_NAME = "greptilecord"
-REPO_BRANCH = "master"
+REPO_BRANCH = "main"
 
 # Discord bot permissions
 BOT_PERMISSIONS = discord.Permissions(8) # Have this set as admin for convenience but should be limited
