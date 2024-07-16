@@ -7,13 +7,15 @@ from datetime import datetime
 from collections import defaultdict
 import asyncio
 import urllib.parse
+import json
 
-TOKEN = os.getenv('DISCORD_BOT_TOKEN')
-GREPTILE_API_KEY = os.getenv('GREPTILE_API_KEY')
-GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
-WHITELIST = os.getenv('WHITELIST', '').split(',') # Whitelisted users can query
-BOT_OWNER_ID = os.getenv('BOT_OWNER_ID') # Unlimited queries
-MAX_QUERIES_PER_DAY = int(os.getenv('MAX_QUERIES_PER_DAY', 5)) # Max for whitelisted users
+TOKEN = '' # Discord bot token
+GREPTILE_API_KEY = '' #Greptile key
+GITHUB_TOKEN = '' # Github PAT token
+WHITELIST_FILE = 'whitelist.json' # Whitelisted Discord IDs
+BOT_OWNER_ID = '890302656025882654' # Bypasses query limits
+MAX_QUERIES_PER_DAY = 5 # Normal mode
+MAX_SMART_QUERIES_PER_DAY = 1 # Genius mode
 
 # Repository configuration
 REPO_REMOTE = "github"
@@ -21,19 +23,39 @@ REPO_OWNER = "followingthefasciaplane"
 REPO_NAME = "greptilecord"
 REPO_BRANCH = "main"
 
-# Discord bot permissions
-BOT_PERMISSIONS = discord.Permissions(8)  # Admin but should be limited
+# Discord bot permissions, admin for convenience but limit this
+BOT_PERMISSIONS = discord.Permissions(8)
 
-# Initialize bot with all intents but should be limited
+# Initialize bot with all intents, limit this too
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='~', intents=intents)
 
 # Track user queries
 user_queries: Dict[int, List[datetime]] = defaultdict(list)
+user_smart_queries: Dict[int, List[datetime]] = defaultdict(list)
+
+# Load whitelist from file
+def load_whitelist():
+    if os.path.exists(WHITELIST_FILE):
+        with open(WHITELIST_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+# Save whitelist to file
+def save_whitelist(whitelist):
+    with open(WHITELIST_FILE, 'w') as f:
+        json.dump(whitelist, f)
+
+WHITELIST = load_whitelist()
 
 def is_whitelisted() -> commands.check:
     async def predicate(ctx: commands.Context) -> bool:
         return str(ctx.author.id) in WHITELIST or str(ctx.author.id) == BOT_OWNER_ID
+    return commands.check(predicate)
+
+def is_bot_owner() -> commands.check:
+    async def predicate(ctx: commands.Context) -> bool:
+        return str(ctx.author.id) == BOT_OWNER_ID
     return commands.check(predicate)
 
 def can_make_query(user_id: int) -> bool:
@@ -43,46 +65,61 @@ def can_make_query(user_id: int) -> bool:
     user_queries[user_id] = [date for date in user_queries[user_id] if date.date() == today]
     return len(user_queries[user_id]) < MAX_QUERIES_PER_DAY
 
+def can_make_smart_query(user_id: int) -> bool:
+    if str(user_id) == BOT_OWNER_ID:
+        return True
+    today = datetime.now().date()
+    user_smart_queries[user_id] = [date for date in user_smart_queries[user_id] if date.date() == today]
+    return len(user_smart_queries[user_id]) < MAX_SMART_QUERIES_PER_DAY
+
 async def index_repository() -> None:
-    url = 'https://api.greptile.com/v2/repositories'
-    headers = {
-        'Authorization': f'Bearer {GREPTILE_API_KEY}',
-        'X-GitHub-Token': GITHUB_TOKEN,
-        'Content-Type': 'application/json'
-    }
-    payload = {
-        "remote": REPO_REMOTE,
-        "repository": f"{REPO_OWNER}/{REPO_NAME}",
-        "branch": REPO_BRANCH,
-        "reload": True,
-        "notify": False
-    }
+    current_status = await get_repository_status()
+    
+    if current_status == 'completed':
+        print("Repository is already indexed. Skipping indexing process.")
+        return
+    elif current_status == 'processing':
+        print("Repository is currently being processed. Waiting for completion...")
+    else:
+        url = 'https://api.greptile.com/v2/repositories'
+        headers = {
+            'Authorization': f'Bearer {GREPTILE_API_KEY}',
+            'X-GitHub-Token': GITHUB_TOKEN,
+            'Content-Type': 'application/json'
+        }
+        payload = {
+            "remote": REPO_REMOTE,
+            "repository": f"{REPO_OWNER}/{REPO_NAME}",
+            "branch": REPO_BRANCH,
+            "reload": False,
+            "notify": False
+        }
 
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.post(url, json=payload, headers=headers) as response:
-                response.raise_for_status()
-                result = await response.json()
-                print(f"Repository indexing started: {result['response']}")
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(url, json=payload, headers=headers) as response:
+                    response.raise_for_status()
+                    result = await response.json()
+                    print(f"Repository indexing response: {result['response']}")
+            except aiohttp.ClientError as e:
+                print(f"An error occurred while indexing the repository: {str(e)}")
+                print(f"URL attempted: {url}")
+                print(f"Payload: {payload}")
+                return
 
-            while True:
-                status = await get_repository_status()
-                if status == 'completed':
-                    print("Repository indexing completed.")
-                    break
-                elif status == 'failed':
-                    print("Repository indexing failed.")
-                    break
-                elif status is None:
-                    print("Unable to retrieve repository status. Stopping indexing check.")
-                    break
-                print(f"Indexing status: {status}")
-                await asyncio.sleep(60)  # Check every minute
-
-        except aiohttp.ClientError as e:
-            print(f"An error occurred while indexing the repository: {str(e)}")
-            print(f"URL attempted: {url}")
-            print(f"Payload: {payload}")
+    while True:
+        status = await get_repository_status()
+        if status == 'completed':
+            print("Repository indexing completed.")
+            break
+        elif status == 'failed':
+            print("Repository indexing failed.")
+            break
+        elif status is None:
+            print("Unable to retrieve repository status. Stopping indexing check.")
+            break
+        print(f"Indexing status: {status}")
+        await asyncio.sleep(60)  # Check every minute
 
 async def get_repository_status() -> Optional[str]:
     repo_id = f"{REPO_REMOTE}:{REPO_BRANCH}:{REPO_OWNER}/{REPO_NAME}"
@@ -111,14 +148,7 @@ async def on_ready() -> None:
     print(f'{bot.user} has connected to Discord!')
     await index_repository()
 
-@bot.command(name='query')
-@commands.cooldown(1, 5, commands.BucketType.user)
-@is_whitelisted()
-async def query(ctx: commands.Context, *, question: str) -> None:
-    if not can_make_query(ctx.author.id):
-        await ctx.send(f"You have reached the maximum number of queries ({MAX_QUERIES_PER_DAY}) for today.")
-        return
-
+async def process_query(ctx: commands.Context, question: str, genius: bool) -> None:
     url = 'https://api.greptile.com/v2/query'
     headers = {
         'Authorization': f'Bearer {GREPTILE_API_KEY}',
@@ -142,7 +172,7 @@ async def query(ctx: commands.Context, *, question: str) -> None:
         ],
         "sessionId": f"discord-query-{ctx.author.id}-{ctx.message.id}",
         "stream": False,
-        "genius": True
+        "genius": genius
     }
 
     async with aiohttp.ClientSession() as session:
@@ -160,11 +190,32 @@ async def query(ctx: commands.Context, *, question: str) -> None:
             await ctx.send(embed=embed)
 
             if str(ctx.author.id) != BOT_OWNER_ID:
-                user_queries[ctx.author.id].append(datetime.now())
+                if genius:
+                    user_smart_queries[ctx.author.id].append(datetime.now())
+                else:
+                    user_queries[ctx.author.id].append(datetime.now())
 
         except aiohttp.ClientError as e:
             await ctx.send(f"An error occurred while processing your request. Please try again later.")
             print(f"Error in query: {str(e)}")
+
+@bot.command(name='query')
+@commands.cooldown(1, 5, commands.BucketType.user)
+@is_whitelisted()
+async def query(ctx: commands.Context, *, question: str) -> None:
+    if not can_make_query(ctx.author.id):
+        await ctx.send(f"You have reached the maximum number of queries ({MAX_QUERIES_PER_DAY}) for today.")
+        return
+    await process_query(ctx, question, False)
+
+@bot.command(name='smartquery')
+@commands.cooldown(1, 5, commands.BucketType.user)
+@is_whitelisted()
+async def smartquery(ctx: commands.Context, *, question: str) -> None:
+    if not can_make_smart_query(ctx.author.id):
+        await ctx.send(f"You have reached the maximum number of smart queries ({MAX_SMART_QUERIES_PER_DAY}) for today.")
+        return
+    await process_query(ctx, question, True)
 
 @bot.command(name='search')
 @commands.cooldown(1, 5, commands.BucketType.user)
@@ -223,28 +274,66 @@ async def search(ctx: commands.Context, *, search_query: str) -> None:
 @bot.command(name='greptilehelp')
 async def greptilehelp(ctx: commands.Context) -> None:
     help_embed = discord.Embed(
-        title="Greptile Bot Help",
-        description="This bot helps you search and query the Source Engine 2018 HL2 repository.",
+        title="Greptile Bot",
+        description="This bot answers questions about a repo.",
         color=discord.Color.blue()
     )
     help_embed.add_field(
         name="~search <search_query>",
-        value="Search for relevant code in the repository.\nExample: `~search physics engine implementation`",
+        value="Search for relevant code in the repository.\nExample: `~search example`",
         inline=False
     )
     help_embed.add_field(
         name="~query <question>",
-        value="Ask a question about the codebase and get a detailed answer.\nExample: `~query How does the physics engine work in this Source Engine implementation?`",
+        value="Ask a question about the codebase and get a detailed answer.\nExample: `~query How does the example work in example?`",
+        inline=False
+    )
+    help_embed.add_field(
+        name="~smartquery <question>",
+        value="Ask a more complex question using the 'genius' feature.\nExample: `~smartquery Explain the relationship between example and example in the example system.`",
         inline=False
     )
     help_embed.add_field(
         name="Usage Limits",
-        value=f"- You can make up to {MAX_QUERIES_PER_DAY} queries per day.\n- Only whitelisted users can use these commands.",
+        value=f"- You can make up to {MAX_QUERIES_PER_DAY} regular queries and {MAX_SMART_QUERIES_PER_DAY} smart queries per day.\n- Only whitelisted users can use these commands.",
         inline=False
     )
     help_embed.set_footer(text="If you have any issues or questions, please contact the bot owner.")
 
     await ctx.send(embed=help_embed)
+
+@bot.command(name='listwhitelist')
+@is_bot_owner()
+async def listwhitelist(ctx: commands.Context) -> None:
+    whitelist_str = "\n".join(WHITELIST)
+    await ctx.send(f"Current whitelist:\n{whitelist_str}")
+
+@bot.command(name='addwhitelist')
+@is_bot_owner()
+async def addwhitelist(ctx: commands.Context, user_id: str) -> None:
+    if user_id not in WHITELIST:
+        WHITELIST.append(user_id)
+        save_whitelist(WHITELIST)
+        await ctx.send(f"User {user_id} added to whitelist.")
+    else:
+        await ctx.send(f"User {user_id} is already in the whitelist.")
+
+@bot.command(name='removewhitelist')
+@is_bot_owner()
+async def removewhitelist(ctx: commands.Context, user_id: str) -> None:
+    if user_id in WHITELIST:
+        WHITELIST.remove(user_id)
+        save_whitelist(WHITELIST)
+        await ctx.send(f"User {user_id} removed from whitelist.")
+    else:
+        await ctx.send(f"User {user_id} is not in the whitelist.")
+
+@bot.command(name='reload')
+@is_bot_owner()
+async def reload_bot(ctx: commands.Context) -> None:
+    await ctx.send("Reloading the bot...")
+    await bot.close()
+    os.execv(sys.executable, ['python'] + sys.argv)
 
 # Run the bot
 bot.run(TOKEN)
