@@ -233,7 +233,7 @@ async def greptilehelp(ctx):
     help_message = f"""
 **Greptile Bot Help**
 
-This bot helps you search and query the Source Engine 2018 HL2 repository. #Example 
+This bot helps you search and query the Source Engine 2018 HL2 repository.
 
 **Commands:**
 
