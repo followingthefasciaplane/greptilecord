@@ -1,6 +1,7 @@
 # Greptile 
 
-This Discord bot provides information and answers questions about a repo using [Greptile](https://greptile.com) API. See [documentation](https://docs.greptile.com/prompt-guide).
+This Discord bot provides information and answers questions about a repo using [Greptile](https://greptile.com) API. See [documentation](https://docs.greptile.com/prompt-guide).  
+I am not affiliated with Greptile in any way.
 
 ## Commands
 
