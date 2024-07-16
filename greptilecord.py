@@ -227,12 +227,13 @@ async def search(ctx, *, search_query):
     except requests.exceptions.RequestException as e:
         await ctx.send(f"An error occurred while searching the repository: {str(e)}")
 
+# Example help command
 @bot.command(name='greptilehelp')
 async def greptilehelp(ctx):
     help_message = f"""
 **Greptile Bot Help**
 
-This bot helps you search and query the Source Engine 2018 HL2 repository.
+This bot helps you search and query the Source Engine 2018 HL2 repository. #Example 
 
 **Commands:**
 
