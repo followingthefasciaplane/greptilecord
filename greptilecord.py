@@ -7,7 +7,7 @@ from collections import defaultdict
 import asyncio
 import urllib.parse
 
-TOKEN = 'YOUR_DISCORD_TOKEN'
+TOKEN = 'YOUR_BOT_TOKEN'
 GREPTILE_API_KEY = 'YOUR_GREPTILE_KEY'
 GITHUB_TOKEN = 'YOUR_GITHUB_PAT'
 WHITELIST = ['251574105356751746', '325364234672159234']  # Whitelisted user IDs can query and search
