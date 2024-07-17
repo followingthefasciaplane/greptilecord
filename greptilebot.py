@@ -960,13 +960,79 @@ async def on_ready():
 
 @tasks.loop(minutes=30)
 async def check_repo_status():
-    repos = await get_repos()
-    if not repos:
-        return  # Don't check if there are no repos
+    logger.info("Starting repository status check cycle")
+    try:
+        repos = await get_repos()
+        if not repos:
+            logger.info("No repositories found to check.")
+            return
 
-    for repo in repos:
-        status = await get_repository_status(repo)
-        logger.info(f"Repository {repo[1]}/{repo[2]} status: {status}")
+        logger.info(f"Checking status for {len(repos)} repositories")
+
+        for repo in repos:
+            try:
+                remote, owner, name, branch = repo
+                repo_id = f"{remote}:{branch}:{owner}/{name}"
+                logger.info(f"Checking status for repository: {repo_id}")
+                
+                status_info = await get_repository_status(repo)
+                
+                if isinstance(status_info, dict):
+                    logger.debug(f"Repository info retrieved for {repo_id}: {status_info}")
+                    status = status_info.get('status', 'unknown')
+                elif isinstance(status_info, str):
+                    status = status_info
+                else:
+                    status = 'unknown'
+                    logger.warning(f"Unexpected status type for {repo_id}: {type(status_info)}")
+
+                logger.info(f"Repository {repo_id} status: {status}")
+
+                if status == 'failed':
+                    error_message = f"Repository {repo_id} indexing has failed."
+                    logger.error(error_message)
+                    await report_error(error_message)
+                elif status == 'processing':
+                    logger.warning(f"Repository {repo_id} is still processing. This may need attention.")
+                elif status != 'completed':
+                    logger.info(f"Repository {repo_id} has status: {status}")
+
+            except aiohttp.ClientResponseError as e:
+                error_message = f"HTTP error occurred while checking repository {repo_id} status: {e.status} - {e.message}"
+                logger.error(error_message)
+                await report_error(error_message)
+            except aiohttp.ClientError as e:
+                error_message = f"Client error occurred while checking repository {repo_id} status: {str(e)}"
+                logger.error(error_message)
+                await report_error(error_message)
+            except Exception as e:
+                error_message = f"Unexpected error checking status for repo {repo_id}: {str(e)}"
+                logger.error(error_message)
+                await report_error(error_message)
+
+    except Exception as e:
+        error_message = f"Unexpected error in check_repo_status: {str(e)}"
+        logger.error(error_message)
+        await report_error(error_message)
+    
+    logger.info("Completed repository status check cycle")
+
+@check_repo_status.before_loop
+async def before_check_repo_status():
+    await bot.wait_until_ready()
+    logger.info("Repository status check loop is ready to start.")
+
+@check_repo_status.after_loop
+async def after_check_repo_status():
+    if check_repo_status.is_being_cancelled():
+        logger.warning("Repository status check loop was cancelled.")
+    else:
+        logger.error("Repository status check loop has stopped unexpectedly.")
+        await report_error("Repository status check loop has stopped unexpectedly.")
+        # Attempt to restart the task
+        await asyncio.sleep(60)  # Wait for 1 minute before restarting
+        check_repo_status.restart()
+        logger.info("Attempting to restart check_repo_status task.")
 
 async def setup_bot():
     """Perform initial bot setup."""
