@@ -1,3 +1,5 @@
 discord.py
-requests
 aiohttp
+PyYAML
+requests
+aiosqlite
