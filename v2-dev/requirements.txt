@@ -1,0 +1,8 @@
+discord.py
+aiosqlite
+python-dotenv
+PyYAML
+aiohttp
+yoyo-migrations
+psutil
+asyncio

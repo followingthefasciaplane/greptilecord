@@ -1,0 +1,71 @@
+# Bot Settings
+bot:
+  prefix: "~"
+  version: "1.0.0"
+  owner_id: "890302656025882654"
+
+# Discord Settings
+discord:
+  bot_token: ${DISCORD_BOT_TOKEN}
+
+# Greptile API Settings
+greptile:
+  api_key: ${GREPTILE_API_KEY}
+  github_token: ${GREPTILE_GITHUB_TOKEN}
+  api_base_url: "https://api.greptile.com/v2"
+
+# Database Settings
+database:
+  url: "bot_data.db"
+  migrations_path: "./migrations"
+  max_connections: 5
+  connection_timeout: 30
+
+# Query Limits
+limits:
+  max_queries_per_day: 5
+  max_smart_queries_per_day: 1
+  max_searches_per_day: 10
+
+# Repository Settings
+repository:
+  allow_multiple_repos: false
+  max_indexed_repos: 5
+  indexing_timeout: 7200  # 2 hours in seconds
+
+# Logging Settings
+logging:
+  level: "INFO"
+  format: "%(asctime)s:%(levelname)s:%(name)s: %(message)s"
+  file: "bot.log"
+
+# Error Reporting
+error_reporting:
+  channel_id: "YOUR_ERROR_CHANNEL_ID"
+
+# Rate Limiting
+rate_limiting:
+  default_rate: 5
+  default_per: 1  # 5 requests per second
+  user_rate: 2
+  user_per: 60  # 2 requests per minute per user
+
+# Caching
+caching:
+  enabled: true
+  ttl: 3600  # Time to live in seconds
+
+# Feature Flags
+features:
+  enable_smart_query: true
+  enable_repo_status_check: true
+
+# Whitelist Settings
+whitelist:
+  enabled: true
+  auto_add_server_owner: true
+
+# Custom Messages
+messages:
+  welcome: "Welcome to the Greptile bot! Use ~greptilehelp to see available commands."
+  error: "An unexpected error occurred. Please try again later or contact the bot owner."
