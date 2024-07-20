@@ -1,5 +1,5 @@
-discord.py
-aiohttp
-PyYAML
-requests
-aiosqlite
+discord.py==2.3.1
+aiohttp==3.8.5
+PyYAML==6.0.1
+aiosqlite==0.19.0
+tenacity==8.2.2
