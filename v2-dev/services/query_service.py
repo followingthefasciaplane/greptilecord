@@ -23,6 +23,7 @@ class QueryService:
 
     async def can_make_query(self, user_id: int, query_type: str) -> bool:
         try:
+            # Shouldn't use config service here yet but we plan on doing this
             if str(user_id) == await self.config_service.get_config('BOT_OWNER_ID'):
                 return True
             today = date.today()
