@@ -1,28 +1,30 @@
+# Standard library imports
 import os
 import sys
-from typing import Optional, List, Dict, Any, Tuple, Union
-import discord
-from discord.ext import commands, tasks
-from discord.ui import View, Button
-import aiohttp
-from datetime import datetime, timedelta
-import asyncio
-import urllib.parse
 import json
-import logging
+import time
+import urllib.parse
+import traceback
+from datetime import datetime, timedelta
 from enum import Enum
+from typing import Optional, List, Dict, Any, Tuple, Union
+from collections import defaultdict
+from contextlib import asynccontextmanager
+
+# Third-party library imports
 import yaml
+import aiohttp
+import discord
 import sqlite3
 import aiosqlite
-import time
-from collections import defaultdict
-import traceback
+import asyncio
+from discord.ext import commands, tasks
+from discord.ui import View, Button
 from aiohttp import ClientResponseError, ServerDisconnectedError
-from contextlib import asynccontextmanager
-import functools
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-# Enhanced logging setup
+# Logging setup
+import logging
 logging.basicConfig(
     filename='bot.log',
     level=logging.DEBUG,
@@ -33,9 +35,6 @@ logger = logging.getLogger(__name__)
 active_queries = set()
 last_query_time = defaultdict(float)
 COOLDOWN_TIME = 5  # 5 seconds cooldown
-
-# Database connection pool
-import aiosqlite
 
 class DatabasePool:
     def __init__(self, database_name, max_connections=5):
