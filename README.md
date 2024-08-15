@@ -12,6 +12,55 @@ This Discord bot provides information and answers questions about repositories u
 - Periodic repository status checks
 - Automatic reindexing of repositories
 - Pagination for long responses
+- SQLite for persistent storage
+
+## Unsupported 
+
+- Chat history and session management
+  
+I may implement this in the future, as Greptile's API supports it, however, for now this bot only supports 0 shot queries.
+
+## Installation
+
+1. Set up a virtual environment and install dependencies:
+   - On Linux/macOS:
+     ```
+     ./setup_venv.sh
+     ```
+   - On Windows:
+     ```
+     setup_venv.bat
+     ```
+
+2. Update your "secrets.yaml" file:
+   ```yaml
+   DISCORD_BOT_TOKEN: 'your_discord_bot_token' # You will add this in Step 3
+   GREPTILE_API_KEY: 'your_greptile_api_key' # Your Greptile API Key
+   GITHUB_TOKEN: 'your_github_token' # Your GitHub PAT
+   BOT_OWNER_ID: 'your_discord_user_id' # This is not your username
+   ```
+   - To find your Discord ID, you can read [this article](https://support.discord.com/hc/en-us/articles/206346498-Where-can-I-find-my-User-Server-Message-ID).
+
+3. Create a Discord application and bot:
+   - Go to the [Discord Developer Portal](https://discord.com/developers/applications)
+   - Click "New Application" and configure your application
+   - Go to the "Bot" tab and click "Add Bot"
+   - Under the bot's username, click "Copy" to copy the bot token
+   - Paste the bot token in your `secrets.yaml` file
+   - Under "Privileged Gateway Intents", enable all intents
+   - Go to the "Installation" tab and enable "Guild Install"
+   - Select the "bot" and "applications.commands" scopes 
+   - For bot permissions, select "Administrator"
+   - Save all and copy the generated URL and use it to invite the bot to your server
+
+4. Run the bot:
+   ```
+   python greptilebot.py
+   ```
+
+### Optional security
+- Consider limiting Discord intents and permissions to what is needed. Full permissions are provided for convenience.
+- Consider using environment variables in `secrets.yaml`. Eg: `DISCORD_BOT_TOKEN: '${DISCORD_BOT_TOKEN}'`
 
 ## Commands
 
@@ -46,76 +95,82 @@ This Discord bot provides information and answers questions about repositories u
 
 ## Configuration
 
-- Regular queries: Configurable daily limit per whitelisted user (default: 5).
-- Smart queries (genius mode): Configurable daily limit per whitelisted user (default: 1).
+- Daily limits for regular and smart queries per user.
+- Smart queries are 3x the price of regular queries in the Greptile API.
 - The bot owner has unlimited usage of all commands.
-- Configurable options are stored in a SQLite database for persistence.
-- Customizable bot prefix (default: '~')
+
+### Config Keys:
+
+- `MAX_QUERIES_PER_DAY`: Maximum number of regular queries a user can make per day (default: 5)
+- `MAX_SMART_QUERIES_PER_DAY`: Maximum number of smart queries a user can make per day (default: 1)
+- `API_TIMEOUT`: Timeout for API calls in seconds (default: 60)
+- `API_RETRIES`: Maximum retries for failed API calls (default: 3)
+- `BOT_PREFIX`: The prefix used for bot commands (default: "~")
+- `DEFAULT_BRANCH`: The default branch to use, if it is omitted from an Administrator command (default: main)
+
+These can be adjusted with the `~setconfig <key> <value>` command.   
+To view your current keyvalues, use `~viewconfig`.
 
 ## Whitelist System
 
-- Three user roles: User, Admin, and Owner.
-- Only whitelisted users can use the search and query commands.
+- Three user roles: `UserRole.USER`, `UserRole.ADMIN`, and `UserRole.OWNER`.
+- Only whitelisted users can use the general commands.
 - Admins can manage the whitelist and bot configuration.
-- The Owner (set in the configuration) has full access to all commands.
-- Whitelist data is stored in a SQLite database for persistence.
+- The Owner (can only be set in `secrets.yaml`) has full access to all commands, and bypasses daily limits.
+
+### Whitelisting users
+
+- Only the Owner can use `~addadmin` and `~removeadmin`.  
+These commands will add `UserRole.ADMIN` to a Discord ID, or demote an existing Admin ID to `UserRole.USER`.
+  
+- Admins can use `~addwhitelist` and `~removewhitelist`.  
+These commands will add or remove `UserRole.USER` to or from a Discord ID.  
+
+- To view the current list of users and the roles they have, you can use `~listwhitelist`.
+
+### Changing permissions for commands
+
+Using `~seterrorchannel` as an example, you can change this line in `src/greptilebot.py` to one of three roles:  
+```
+@bot.command(name='seterrorchannel')
+@is_whitelisted(UserRole.ADMIN)
+```
+
+
+```
+@bot.command(name='seterrorchannel')  
+@is_whitelisted(UserRole.OWNER)
+```
+
+
+```
+@bot.command(name='seterrorchannel')  
+@is_whitelisted(UserRole.USER)
+```
 
 ## Database
 
-The bot uses SQLite for persistent storage of:
+The bot uses SQLite for persistent storage of:  
 - Whitelist information
 - Indexed repositories
 - Bot configuration
+- DB created automatically in `src/bot_data.db`.
 
 ## Error Handling and Logging
 
 - Comprehensive error handling for all commands.
-- Configurable error reporting channel.
 - Detailed logging of bot activities and errors.
-- Automatic error reporting to a designated channel and the bot owner.
+- Automatic error reporting to a designated channel and to the bot owner directly via DM.
+- Debug logfile is automatically generated `src/bot.log`
+
+`~setlogchannel` will stream the debug log to a channel. **Use carefully, this can leak environment information.**  
+`~seterrorchannel` will set a channel to log errors in.  
+`~testerror` will cause a division by 0 error to test the error reporting system.
 
 ## Periodic Tasks
 
 - Automatic repository status checks every 30 minutes.
 - Reporting of failed or stuck repository indexing.
-
-## Installation
-
-1. Set up a virtual environment and install dependencies:
-   - On Linux/macOS:
-     ```
-     ./setup_venv.sh
-     ```
-   - On Windows:
-     ```
-     setup_venv.bat
-     ```
-
-2. Update your "secrets.yaml" file:
-   ```yaml
-   DISCORD_BOT_TOKEN: 'your_discord_bot_token'
-   GREPTILE_API_KEY: 'your_greptile_api_key'
-   GITHUB_TOKEN: 'your_github_token'
-   BOT_OWNER_ID: 'your_discord_user_id'
-   ```
-
-
-3. Create a Discord application and bot:
-   - Go to the [Discord Developer Portal](https://discord.com/developers/applications)
-   - Click "New Application" and configure your application
-   - Go to the "Bot" tab and click "Add Bot"
-   - Under the bot's username, click "Copy" to copy the bot token
-   - Paste the bot token in your `secrets.yaml` file
-   - Under "Privileged Gateway Intents", enable all intents
-   - Go to the "Installation" tab and enable "Guild Install"
-   - Select the "bot" and "applications.commands" scopes 
-   - For bot permissions, select "Administrator"
-   - Save all and copy the generated URL and use it to invite the bot to your server
-
-4. Run the bot:
-   ```
-   python greptilebot.py
-   ```
 
 ## Note
 
