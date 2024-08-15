@@ -37,12 +37,12 @@ This Discord bot provides information and answers questions about repositories u
 - `~setlogchannel <channel_id>`: Sets the channel for logging bot activities.
 - `~seterrorchannel <channel_id>`: Sets the channel for error reporting.
 - `~testerror`: Tests the error reporting system.
-- `~reload`: Reloads the bot.
 
 ### Owner Commands
 
 - `~addadmin <user_id>`: Promotes a user to admin.
 - `~removeadmin <user_id>`: Demotes an admin to a regular user.
+- `~reload`: Reloads the bot.
 
 ## Configuration
 
