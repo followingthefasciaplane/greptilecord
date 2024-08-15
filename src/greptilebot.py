@@ -22,7 +22,6 @@ from discord.ext import commands, tasks
 from discord.ui import View, Button
 from aiohttp import ClientResponseError, ServerDisconnectedError
 from tenacity import retry, stop_after_attempt, wait_exponential
-from aiofiles import open as aio_open
 
 # Logging setup
 import logging
@@ -525,82 +524,36 @@ async def greptilehelp(ctx: commands.Context):
     """
     Display detailed help information for Greptile bot commands.
     """
-    # Create main embed
-    main_embed = discord.Embed(
+    embed = discord.Embed(
         title="Greptile Bot Help",
         description="This bot answers questions about specific GitHub repositories using the Greptile API. Here are the available commands:",
         color=discord.Color.blue()
     )
 
-    # Owner Commands
-    owner_embed = discord.Embed(title="Owner Commands", color=discord.Color.purple())
-    owner_commands = [
-        ("👑 addadmin", "Promote a user to admin.\nUsage: `~addadmin <user_id>`\nExample: `~addadmin 123456789`"),
-        ("👑 removeadmin", "Demote an admin to regular user.\nUsage: `~removeadmin <user_id>`\nExample: `~removeadmin 123456789`"),
-        ("🔄 reload", "Reload the bot.\nUsage: `~reload`")
-    ]
-    for name, value in owner_commands:
-        owner_embed.add_field(name=name, value=value, inline=False)
+    # Sort commands alphabetically
+    sorted_commands = sorted(bot.commands, key=lambda x: x.name)
 
-    # Admin Commands
-    admin_embed = discord.Embed(title="Admin Commands", color=discord.Color.red())
-    admin_commands = [
-        ("📚 addrepo", "Add and index a new repository.\nUsage: `~addrepo <remote> <owner/name> [branch]`\nExample: `~addrepo github openai/gpt-3 main`"),
-        ("✅ addwhitelist", "Add a user to the whitelist.\nUsage: `~addwhitelist <user_id>`\nExample: `~addwhitelist 123456789`"),
-        ("🔄 reindex", "Force reindexing of a specific repository or all repositories if no ID is provided.\nUsage: `~reindex [repo_id]`"),
-        ("🗑️ removerepos", "Remove all indexed repositories.\nUsage: `~removerepos`"),
-        ("❌ removewhitelist", "Remove a user from the whitelist.\nUsage: `~removewhitelist <user_id>`\nExample: `~removewhitelist 123456789`"),
-        ("⚙️ setconfig", "Set a configuration value.\nUsage: `~setconfig <key> <value>`\nExample: `~setconfig MAX_QUERIES_PER_DAY 10`"),
-        ("⚠️ seterrorchannel", "Set the channel for error reporting.\nUsage: `~seterrorchannel <channel_id>`\nExample: `~seterrorchannel 123456789`"),
-        ("📢 setlogchannel", "Set the channel for logging bot activities and stream debug info.\nUsage: `~setlogchannel <channel_id>`\nExample: `~setlogchannel 123456789`"),
-        ("🧪 testerror", "Test the error reporting system.\nUsage: `~testerror`"),
-        ("👁️ viewconfig", "View the current bot configuration.\nUsage: `~viewconfig`")
-    ]
-    for name, value in admin_commands:
-        admin_embed.add_field(name=name, value=value, inline=False)
+    for command in sorted_commands:
+        if command.hidden:
+            continue
+        
+        command_help = command.help or "No description available."
 
-    # User Commands
-    user_embed = discord.Embed(title="User Commands", color=discord.Color.green())
-    user_commands = [
-        ("❓ query", "Ask a question about the codebase and get a detailed answer.\nUsage: `~query <question>`\nExample: `~query \"How does the authentication system work?\"`"),
-        ("🔍 search", "Search for relevant code in the repository.\nUsage: `~search <query>`\nExample: `~search \"function to calculate fibonacci sequence\"`"),
-        ("🧠 smartquery", "Ask a more complex question using the 'genius' feature for more detailed analysis.\nUsage: `~smartquery <question>`\nExample: `~smartquery \"Explain the overall architecture of the project\"`"),
-        ("📋 listrepos", "List all indexed repositories.\nUsage: `~listrepos`"),
-        ("👥 listwhitelist", "List all whitelisted users.\nUsage: `~listwhitelist`"),
-        ("📊 repostatus", "View the current status of the indexed repositories.\nUsage: `~repostatus`"),
-        ("❔ greptilehelp", "Display this help information.\nUsage: `~greptilehelp`")
-    ]
-    for name, value in user_commands:
-        user_embed.add_field(name=name, value=value, inline=False)
+        embed.add_field(
+            name=f"{command.name.capitalize()}",
+            value=command_help,
+            inline=False
+        )
 
-    # Configuration explanation
-    config_embed = discord.Embed(title="Configuration", color=discord.Color.gold())
-    config_embed.add_field(
-        name="Config Keys",
-        value="• `MAX_QUERIES_PER_DAY`: Maximum number of regular queries a user can make per day\n"
-            "• `MAX_SMART_QUERIES_PER_DAY`: Maximum number of smart queries a user can make per day\n"
-            "• `API_TIMEOUT`: Timeout for API calls in seconds\n"
-            "• `API_RETRIES`: Maximum retries for failed API calls\n"
-            "• `BOT_PREFIX`: The prefix used for bot commands (default is '~')",
-        inline=False
-    )
-
-    # Usage limits
-    main_embed.add_field(
+    embed.add_field(
         name="Usage Limits",
-        value=f"• You can make up to {CONFIG.get('MAX_QUERIES_PER_DAY', 5)} regular queries and {CONFIG.get('MAX_SMART_QUERIES_PER_DAY', 1)} smart queries per day.\n"
-            f"• Only whitelisted users can use these commands.",
+        value=f"- You can make up to {CONFIG.get('MAX_QUERIES_PER_DAY', 5)} regular queries and {CONFIG.get('MAX_SMART_QUERIES_PER_DAY', 1)} smart queries per day.\n"
+            f"- Only whitelisted users can use these commands.",
         inline=False
     )
+    embed.set_footer(text="If you have any issues or questions, please contact the bot owner.")
 
-    main_embed.set_footer(text="If you have any issues or questions, please contact the bot owner.")
-
-    # Send embeds
-    await ctx.send(embed=main_embed)
-    await ctx.send(embed=owner_embed)
-    await ctx.send(embed=admin_embed)
-    await ctx.send(embed=user_embed)
-    await ctx.send(embed=config_embed)
+    await ctx.send(embed=embed)
 
 @bot.command(name='search')
 @is_whitelisted(UserRole.USER)
@@ -1102,7 +1055,7 @@ async def remove_admin(ctx: commands.Context, user_id: str):
 @is_whitelisted(UserRole.ADMIN)
 async def set_log_channel(ctx: commands.Context, channel_id: str):
     """
-    Set the channel for logging bot activities and stream debug info from the log file.
+    Set the channel for logging bot activities.
     Usage: ~setlogchannel <channel_id>
     Example: ~setlogchannel 123456789
     """
@@ -1118,9 +1071,6 @@ async def set_log_channel(ctx: commands.Context, channel_id: str):
 
         await update_config('log_channel', channel_id)
         await ctx.send(embed=discord.Embed(title="Log Channel Set", description=f"Log channel set to {channel.name} ({channel_id})", color=discord.Color.green()))
-        
-        # Start the log streaming task
-        bot.loop.create_task(stream_logs_to_channel(channel))
     except sqlite3.Error as e:
         error_message = f"Database error in set_log_channel: {str(e)}"
         logger.error(error_message)
@@ -1132,32 +1082,9 @@ async def set_log_channel(ctx: commands.Context, channel_id: str):
         await report_error(error_message)
         await ctx.send(embed=discord.Embed(title="Error", description="An unexpected error occurred while setting the log channel. Please try again later.", color=discord.Color.red()))
 
-async def stream_logs_to_channel(channel):
-    """
-    Stream log file contents to the specified Discord channel.
-    """
-    log_file_path = 'bot.log'
-    last_position = 0
-
-    while True:
-        try:
-            if os.path.exists(log_file_path):
-                async with aio_open(log_file_path, 'r') as file:
-                    await file.seek(last_position)
-                    new_logs = await file.read()
-                    if new_logs:
-                        # Split logs into chunks to respect Discord's message length limit
-                        chunks = [new_logs[i:i+1900] for i in range(0, len(new_logs), 1900)]
-                        for chunk in chunks:
-                            await channel.send(f"```\n{chunk}\n```")
-                    last_position = await file.tell()
-            await asyncio.sleep(10)  # Check for new logs every 10 seconds
-        except Exception as e:
-            logger.error(f"Error in stream_logs_to_channel: {str(e)}")
-            await asyncio.sleep(60)  # If an error occurs, wait for 1 minute before retrying
 
 @bot.command(name='reload')
-@is_whitelisted(UserRole.OWNER)
+@is_whitelisted(UserRole.ADMIN)
 async def reload_bot(ctx: commands.Context):
     """
     Reload the bot (owner only).
@@ -1569,19 +1496,6 @@ async def setup_bot():
             await conn.commit()
         
         CONFIG = await load_db_config()
-        
-        # Start the log streaming task if log_channel is set
-        log_channel_id = CONFIG.get('log_channel')
-        if log_channel_id:
-            channel = bot.get_channel(int(log_channel_id))
-            if channel:
-                bot.loop.create_task(stream_logs_to_channel(channel))
-                logger.info(f"Started log streaming to channel: {channel.name} ({channel.id})")
-            else:
-                logger.warning(f"Log channel with ID {log_channel_id} not found. Log streaming not started.")
-        else:
-            logger.info("No log channel set. Log streaming not started.")
-        
     except sqlite3.Error as e:
         error_message = f"Database error in setup_bot: {str(e)}"
         logger.error(error_message)
@@ -1590,8 +1504,6 @@ async def setup_bot():
         error_message = f"Unexpected error in setup_bot: {str(e)}"
         logger.error(error_message)
         raise RuntimeError(f"Failed to set up the bot due to an unexpected error: {str(e)}")
-    
-    logger.info("Bot setup completed successfully.")
 
 # Initialize the static variables
 report_error.last_error_time = None
